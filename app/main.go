@@ -22,12 +22,11 @@ func main() {
 		return
 	}
 
-	defer func(aof *Aof) {
-		err := aof.Close()
-		if err != nil {
+	defer func() {
+		if err := aof.Close(); err != nil {
 			fmt.Println(err)
 		}
-	}(aof)
+	}()
 
 	aof.Read(func(value Value) {
 		command := strings.ToUpper(value.array[0].bulk)
@@ -43,24 +42,29 @@ func main() {
 	})
 
 	// Listen for connections
-	conn, err := l.Accept()
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-
-	defer func(conn net.Conn) {
-		err := conn.Close()
+	for {
+		conn, err := l.Accept()
 		if err != nil {
 			fmt.Println(err)
+			return
 		}
-	}(conn)
+
+		go handleConnection(conn, aof)
+	}
+}
+
+func handleConnection(conn net.Conn, aof *Aof) {
+	defer func() {
+		if err := conn.Close(); err != nil {
+			fmt.Println("Error closing connection:", err)
+		}
+	}()
 
 	for {
 		resp := NewResp(conn)
 		value, err := resp.Read()
 		if err != nil {
-			fmt.Println(err)
+			fmt.Println("Read error: ", err)
 			return
 		}
 
